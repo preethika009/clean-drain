@@ -1,0 +1,223 @@
+// Prisma schema for Clear Drain civic issue tracking platform
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ───────────────────────────────────────────────────────────────────
+
+enum UserRole {
+  CITIZEN
+  TECHNICIAN
+  ADMIN
+}
+
+enum TicketStatus {
+  PENDING
+  ACKNOWLEDGED
+  ASSIGNED
+  IN_PROGRESS
+  RESOLVED
+  CLOSED
+  ESCALATED
+}
+
+enum Priority {
+  URGENT
+  HIGH
+  MEDIUM
+  LOW
+}
+
+enum Severity {
+  CRITICAL_BLOCKAGE
+  FLOOD_RISK
+  FOUL_ODOR
+  ROUTINE_MAINTENANCE
+  STRUCTURAL_DAMAGE
+}
+
+enum MediaType {
+  BEFORE_PHOTO
+  AFTER_PHOTO
+  VIDEO
+  DOCUMENT
+}
+
+enum EscalationStatus {
+  OPEN
+  UNDER_REVIEW
+  RESOLVED
+}
+
+// ─── Models ──────────────────────────────────────────────────────────────────
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  password      String
+  role          UserRole @default(CITIZEN)
+  phone         String?
+  ward          String?
+  zone          String?
+  avatar        String?
+  language      String   @default("en")
+  emailVerified Boolean  @default(false)
+  isActive      Boolean  @default(true)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  // Relations
+  reportedTickets  Ticket[]     @relation("ReportedBy")
+  assignedTickets  Ticket[]     @relation("AssignedTo")
+  escalations      Escalation[]
+  remindersSent    Reminder[]
+  sessions         Session[]
+
+  @@map("users")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sessions")
+}
+
+model Ticket {
+  id             String       @id @default(cuid())
+  ackId          String       @unique // e.g. CD-2026-A3X7
+  title          String
+  description    String       @db.Text
+  status         TicketStatus @default(PENDING)
+  priority       Priority     @default(MEDIUM)
+  severity       Severity     @default(ROUTINE_MAINTENANCE)
+  tags           String[]
+  // Location
+  latitude       Float
+  longitude      Float
+  address        String
+  ward           String?
+  zone           String?
+  // AI analysis
+  aiAnalysis     Json?        // Gemini AI assessment result
+  aiConfidence   Float?
+  // SLA
+  slaDeadline    DateTime
+  slaBreached    Boolean      @default(false)
+  resolvedAt     DateTime?
+  // Meta
+  reportedById   String
+  assignedToId   String?
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+
+  // Relations
+  reportedBy     User         @relation("ReportedBy", fields: [reportedById], references: [id])
+  assignedTo     User?        @relation("AssignedTo", fields: [assignedToId], references: [id])
+  media          Media[]
+  escalations    Escalation[]
+  updates        TicketUpdate[]
+  notifications  Notification[]
+
+  @@index([status, priority])
+  @@index([ward, zone])
+  @@index([createdAt])
+  @@map("tickets")
+}
+
+model Media {
+  id         String    @id @default(cuid())
+  ticketId   String
+  type       MediaType
+  url        String
+  filename   String
+  mimeType   String
+  sizeBytes  Int
+  uploadedBy String
+  createdAt  DateTime  @default(now())
+
+  ticket     Ticket    @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("media")
+}
+
+model TicketUpdate {
+  id        String   @id @default(cuid())
+  ticketId  String
+  authorId  String
+  content   String   @db.Text
+  status    TicketStatus?
+  isPublic  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  ticket    Ticket   @relation(fields: [ticketId], references: [id], onDelete: Cascade)
+
+  @@map("ticket_updates")
+}
+
+model Escalation {
+  id            String           @id @default(cuid())
+  ticketId      String
+  raisedById    String
+  reason        String           @db.Text
+  status        EscalationStatus @default(OPEN)
+  supervisorNote String?         @db.Text
+  resolvedAt    DateTime?
+  createdAt     DateTime         @default(now())
+  updatedAt     DateTime         @updatedAt
+
+  ticket        Ticket           @relation(fields: [ticketId], references: [id])
+  raisedBy      User             @relation(fields: [raisedById], references: [id])
+
+  @@map("escalations")
+}
+
+model Reminder {
+  id          String   @id @default(cuid())
+  userId      String
+  type        String   // "bi-monthly", "sla-warning", "status-update"
+  subject     String
+  message     String   @db.Text
+  sentAt      DateTime @default(now())
+  delivered   Boolean  @default(false)
+
+  user        User     @relation(fields: [userId], references: [id])
+
+  @@map("reminders")
+}
+
+model Notification {
+  id        String   @id @default(cuid())
+  ticketId  String?
+  userId    String
+  title     String
+  message   String
+  read      Boolean  @default(false)
+  type      String   // "ticket_update", "escalation", "reminder", "assignment"
+  createdAt DateTime @default(now())
+
+  ticket    Ticket?  @relation(fields: [ticketId], references: [id])
+
+  @@map("notifications")
+}
+
+model Zone {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  wards       String[]
+  supervisorId String?
+  createdAt   DateTime @default(now())
+
+  @@map("zones")
+}
