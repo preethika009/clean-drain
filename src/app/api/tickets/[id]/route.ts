@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
@@ -54,6 +55,25 @@ export async function GET(
     });
 
     if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    const storageMedia = ticket.media.filter((media) => !media.url.startsWith("/") && !media.url.startsWith("http"));
+    if (storageMedia.length) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) {
+        return NextResponse.json({ error: "File storage is not configured" }, { status: 503 });
+      }
+      const supabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || "complaint-media";
+      const signedMedia = await Promise.all(ticket.media.map(async (media) => {
+        if (media.url.startsWith("/") || media.url.startsWith("http")) return media;
+        const { data, error } = await supabase.storage.from(bucket).createSignedUrl(media.url, 60 * 60);
+        if (error) throw error;
+        return { ...media, url: data.signedUrl };
+      }));
+      return NextResponse.json({ ticket: { ...ticket, media: signedMedia } });
+    }
     return NextResponse.json({ ticket });
   } catch (err) {
     console.error("[GET /api/tickets/:id]", err);

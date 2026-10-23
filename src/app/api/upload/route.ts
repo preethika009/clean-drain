@@ -1,5 +1,4 @@
-import { mkdir, unlink, writeFile } from "fs/promises";
-import { join } from "path";
+import { createClient } from "@supabase/supabase-js";
 import { getServerSession } from "next-auth";
 import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
@@ -41,7 +40,6 @@ export async function POST(req: Request) {
     if (!extension) {
       return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
     }
-
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: "File too large. Max 10MB." }, { status: 400 });
     }
@@ -65,21 +63,32 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "Only assigned staff can upload this media type" }, { status: 403 });
     }
 
-    // Use the database-generated ticket ID and a MIME-derived extension, never user-supplied path segments.
-    const uploadDir = join(process.cwd(), "public", "uploads", ticket.id);
-    await mkdir(uploadDir, { recursive: true });
-    const filename = `${mediaType.toLowerCase()}-${Date.now()}.${extension}`;
-    const filePath = join(uploadDir, filename);
-    const bytes = await file.arrayBuffer();
-    await writeFile(filePath, Buffer.from(bytes));
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const bucket = process.env.SUPABASE_STORAGE_BUCKET || "complaint-media";
+    if (!supabaseUrl || !serviceRoleKey) {
+      return NextResponse.json({ error: "File storage is not configured" }, { status: 503 });
+    }
+
+    const supabase = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const storagePath = `${ticket.id}/${mediaType.toLowerCase()}-${crypto.randomUUID()}.${extension}`;
+    const { error: uploadError } = await supabase.storage
+      .from(bucket)
+      .upload(storagePath, await file.arrayBuffer(), { contentType: file.type, upsert: false });
+    if (uploadError) {
+      console.error("[POST /api/upload] Supabase Storage upload failed");
+      return NextResponse.json({ error: "Could not store the uploaded file" }, { status: 502 });
+    }
 
     try {
       const media = await prisma.media.create({
         data: {
           ticketId: ticket.id,
           type: mediaType as "BEFORE_PHOTO" | "AFTER_PHOTO" | "VIDEO" | "DOCUMENT",
-          url: `/uploads/${ticket.id}/${filename}`,
-          filename,
+          url: storagePath,
+          filename: `${mediaType.toLowerCase()}-${Date.now()}.${extension}`,
           mimeType: file.type,
           sizeBytes: file.size,
           uploadedBy: user.id,
@@ -87,7 +96,7 @@ export async function POST(req: Request) {
       });
       return NextResponse.json({ media }, { status: 201 });
     } catch (error) {
-      await unlink(filePath).catch(() => undefined);
+      await supabase.storage.from(bucket).remove([storagePath]).catch(() => undefined);
       throw error;
     }
   } catch (err) {
