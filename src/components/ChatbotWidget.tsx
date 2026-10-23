@@ -40,7 +40,7 @@ export default function ChatbotWidget() {
   }, [messages]);
 
   const sendMessage = async (text: string) => {
-    if (!text.trim()) return;
+    if (!text.trim() || loading) return;
     const userMsg: Message = { role: "user", text };
     setMessages((prev) => [...prev, userMsg]);
     setInput("");
@@ -52,7 +52,9 @@ export default function ChatbotWidget() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text, language, ackId: ackId || undefined }),
       });
+      if (!res.ok) throw new Error("Chat request failed.");
       const data = await res.json();
+      if (typeof data.response !== "string") throw new Error("Chat response was unavailable.");
       setMessages((prev) => [...prev, { role: "bot", text: data.response }]);
     } catch {
       setMessages((prev) => [...prev, { role: "bot", text: "Sorry, I'm having trouble connecting. Please try again." }]);
@@ -70,7 +72,7 @@ export default function ChatbotWidget() {
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.85, y: 20 }}
             transition={{ duration: 0.25 }}
-            className="glass-card mb-4 w-80 sm:w-96 flex flex-col overflow-hidden shadow-elevated"
+            className="glass-card mb-4 flex w-[calc(100vw-2rem)] max-w-[24rem] flex-col overflow-hidden shadow-elevated"
             style={{ height: "480px" }}
           >
             {/* Header */}
@@ -90,7 +92,7 @@ export default function ChatbotWidget() {
               <div className="flex items-center gap-2">
                 {/* Language picker */}
                 <div className="relative">
-                  <button onClick={() => setShowLang(!showLang)} className="btn-ghost p-1.5" title="Change language">
+                  <button type="button" onClick={() => setShowLang(!showLang)} className="btn-ghost p-1.5" title="Change language" aria-label="Change language" aria-expanded={showLang}>
                     <Globe className="w-4 h-4 text-primary-300" />
                   </button>
                   {showLang && (
@@ -107,7 +109,7 @@ export default function ChatbotWidget() {
                     </div>
                   )}
                 </div>
-                <button onClick={() => setOpen(false)} className="btn-ghost p-1.5">
+                <button type="button" onClick={() => setOpen(false)} className="btn-ghost p-1.5" aria-label="Close ClearBot">
                   <X className="w-4 h-4 text-slate-400" />
                 </button>
               </div>
@@ -124,7 +126,7 @@ export default function ChatbotWidget() {
             </div>
 
             {/* Messages */}
-            <div className="flex-1 overflow-y-auto p-3 space-y-2">
+            <div className="flex-1 overflow-y-auto p-3 space-y-2" role="log" aria-label="ClearBot conversation" aria-live="polite">
               {messages.map((m, i) => (
                 <div key={i} className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}>
                   <div className={`chat-message ${m.role}`}>
@@ -173,7 +175,9 @@ export default function ChatbotWidget() {
               />
               <button
                 onClick={() => sendMessage(input)}
-                disabled={loading || !input.trim()}
+                    type="button"
+                    aria-label="Send message"
+                    disabled={loading || !input.trim()}
                 className="w-9 h-9 rounded-xl bg-primary-600 hover:bg-primary-500 disabled:opacity-40 flex items-center justify-center transition-colors flex-shrink-0"
               >
                 <Send className="w-4 h-4 text-white" />
@@ -185,6 +189,9 @@ export default function ChatbotWidget() {
 
       {/* Toggle Button */}
       <motion.button
+        type="button"
+        aria-label={open ? "Close ClearBot" : "Open ClearBot"}
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
@@ -203,10 +210,6 @@ export default function ChatbotWidget() {
         </AnimatePresence>
       </motion.button>
 
-      {/* Unread pulse */}
-      {!open && (
-        <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 border-2 border-surface-dark animate-pulse" />
-      )}
     </div>
   );
 }

@@ -6,8 +6,8 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 import {
   MapPin, Clock, CheckCircle, AlertTriangle, Loader2,
-  AlertCircle, ChevronLeft, Upload, Send, Sparkles,
-  Calendar, User, FileImage, TrendingUp
+  AlertCircle, ChevronLeft, Send, Sparkles,
+  User, FileImage, TrendingUp
 } from "lucide-react";
 import { formatDate, getStatusClass, getPriorityClass, isSLABreached, daysUntilSLA } from "@/lib/utils";
 import ChatbotWidget from "@/components/ChatbotWidget";
@@ -21,8 +21,8 @@ interface TicketDetail {
   aiAnalysis: Record<string, unknown> | null; aiConfidence: number | null;
   slaDeadline: string; slaBreached: boolean; resolvedAt: string | null;
   createdAt: string; updatedAt: string;
-  reportedBy: { name: string; email: string };
-  assignedTo: { name: string; email: string } | null;
+  reportedBy: { name: string };
+  assignedTo: { name: string } | null;
   media: { id: string; url: string; type: string; filename: string }[];
   escalations: { id: string; status: string; reason: string; createdAt: string; raisedBy: { name: string } }[];
   updates: { id: string; content: string; status: string | null; createdAt: string; isPublic: boolean }[];
@@ -46,6 +46,7 @@ export default function TrackPage() {
   const [ticket, setTicket] = useState<TicketDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [notFound, setNotFound] = useState(false);
+  const [loadError, setLoadError] = useState("");
   const [escalateOpen, setEscalateOpen] = useState(showEscalateModal);
   const [escalateReason, setEscalateReason] = useState("");
   const [escalating, setEscalating] = useState(false);
@@ -53,9 +54,20 @@ export default function TrackPage() {
 
   useEffect(() => {
     if (!ackId) return;
+    setLoading(true);
+    setNotFound(false);
+    setLoadError("");
+    setTicket(null);
     fetch(`/api/tickets/${ackId}`)
-      .then((r) => { if (r.status === 404) { setNotFound(true); return null; } return r.json(); })
-      .then((d) => { if (d) setTicket(d.ticket); setLoading(false); });
+      .then(async (r) => {
+        if (r.status === 404) { setNotFound(true); return null; }
+        const d = await r.json();
+        if (!r.ok) throw new Error(d.error || "Unable to load this ticket.");
+        return d;
+      })
+      .then((d) => { if (d?.ticket) setTicket(d.ticket); })
+      .catch(() => setLoadError("We couldn’t load this ticket. Check the acknowledgement ID and try again."))
+      .finally(() => setLoading(false));
   }, [ackId]);
 
   const handleEscalate = async () => {
@@ -85,6 +97,15 @@ export default function TrackPage() {
       <h1 className="text-2xl font-bold text-white mb-2">Ticket Not Found</h1>
       <p className="text-slate-400 mb-6">No ticket with ID <strong className="text-primary-400">{ackId}</strong> was found.</p>
       <Link href="/track" className="btn-primary">Search Again</Link>
+    </div>
+  );
+
+  if (loadError) return (
+    <div className="min-h-screen bg-surface-dark flex flex-col items-center justify-center px-6 text-center">
+      <AlertCircle className="mb-4 h-14 w-14 text-amber-300" aria-hidden="true" />
+      <h1 className="mb-2 text-2xl font-bold text-white">Unable to load this ticket</h1>
+      <p className="mb-6 max-w-md text-sm text-slate-300" role="alert">{loadError}</p>
+      <Link href="/track" className="btn-primary">Search again</Link>
     </div>
   );
 

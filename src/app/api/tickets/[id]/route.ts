@@ -1,31 +1,79 @@
 import { NextResponse } from "next/server";
+import { createClient } from "@supabase/supabase-js";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function GET(
   _req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const ticket = await prisma.ticket.findUnique({
-      where: { ackId: params.id },
-      include: {
-        reportedBy: { select: { id: true, name: true, email: true, phone: true } },
-        assignedTo: { select: { id: true, name: true, email: true, phone: true } },
-        media: true,
+      where: { ackId: id },
+      select: {
+        id: true,
+        ackId: true,
+        title: true,
+        description: true,
+        status: true,
+        priority: true,
+        severity: true,
+        tags: true,
+        latitude: true,
+        longitude: true,
+        address: true,
+        ward: true,
+        zone: true,
+        aiAnalysis: true,
+        aiConfidence: true,
+        slaDeadline: true,
+        slaBreached: true,
+        resolvedAt: true,
+        createdAt: true,
+        updatedAt: true,
+        reportedBy: { select: { name: true } },
+        assignedTo: { select: { name: true } },
+        media: { select: { id: true, url: true, type: true, filename: true } },
         escalations: {
-          include: { raisedBy: { select: { name: true, email: true } } },
+          select: {
+            id: true,
+            status: true,
+            reason: true,
+            createdAt: true,
+            raisedBy: { select: { name: true } },
+          },
           orderBy: { createdAt: "desc" },
         },
         updates: {
-          include: { ticket: { select: { ackId: true } } },
+          where: { isPublic: true },
+          select: { id: true, content: true, status: true, createdAt: true, isPublic: true },
           orderBy: { createdAt: "desc" },
         },
       },
     });
 
     if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
+    const storageMedia = ticket.media.filter((media) => !media.url.startsWith("/") && !media.url.startsWith("http"));
+    if (storageMedia.length) {
+      const supabaseUrl = process.env.SUPABASE_URL;
+      const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+      if (!supabaseUrl || !serviceRoleKey) {
+        return NextResponse.json({ error: "File storage is not configured" }, { status: 503 });
+      }
+      const supabase = createClient(supabaseUrl, serviceRoleKey, {
+        auth: { persistSession: false, autoRefreshToken: false },
+      });
+      const bucket = process.env.SUPABASE_STORAGE_BUCKET || "complaint-media";
+      const signedMedia = await Promise.all(ticket.media.map(async (media) => {
+        if (media.url.startsWith("/") || media.url.startsWith("http")) return media;
+        const { data, error } = await supabase.storage.from(bucket).createSignedUrl(media.url, 60 * 60);
+        if (error) throw error;
+        return { ...media, url: data.signedUrl };
+      }));
+      return NextResponse.json({ ticket: { ...ticket, media: signedMedia } });
+    }
     return NextResponse.json({ ticket });
   } catch (err) {
     console.error("[GET /api/tickets/:id]", err);
@@ -35,9 +83,10 @@ export async function GET(
 
 export async function PATCH(
   req: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    const { id } = await params;
     const session = await getServerSession(authOptions);
     if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
@@ -45,15 +94,27 @@ export async function PATCH(
     const body = await req.json();
     const { status, assignedToId, note } = body;
 
-    const ticket = await prisma.ticket.findUnique({ where: { ackId: params.id } });
+    const ticket = await prisma.ticket.findUnique({
+      where: { ackId: id },
+      select: { id: true, assignedToId: true },
+    });
     if (!ticket) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
-    // Permission checks
-    if (user.role === "CITIZEN") {
+    const validStatuses = new Set(["PENDING", "ACKNOWLEDGED", "ASSIGNED", "IN_PROGRESS", "RESOLVED", "CLOSED", "ESCALATED"]);
+    if (status && !validStatuses.has(status)) {
+      return NextResponse.json({ error: "Invalid ticket status" }, { status: 400 });
+    }
+
+    if (user.role !== "ADMIN" && user.role !== "TECHNICIAN") {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
-    if (user.role === "TECHNICIAN" && assignedToId) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    if (user.role === "TECHNICIAN") {
+      if (ticket.assignedToId !== user.id || assignedToId) {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (status && !["IN_PROGRESS", "RESOLVED"].includes(status)) {
+        return NextResponse.json({ error: "Technicians may only start or resolve assigned tickets" }, { status: 403 });
+      }
     }
 
     const updateData: Record<string, unknown> = {};
@@ -62,7 +123,7 @@ export async function PATCH(
     if (status === "RESOLVED") updateData.resolvedAt = new Date();
 
     const updated = await prisma.ticket.update({
-      where: { ackId: params.id },
+      where: { ackId: id },
       data: updateData,
     });
 

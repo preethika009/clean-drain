@@ -5,11 +5,11 @@ import Link from "next/link";
 import { motion } from "framer-motion";
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, LineChart, Line, CartesianGrid, Legend
+  PieChart, Pie, Cell, LineChart, Line, CartesianGrid
 } from "recharts";
 import {
   TrendingUp, FileText, CheckCircle, AlertTriangle, Clock,
-  Users, MapPin, Zap, ChevronRight, LogOut, Bell, Settings, Droplets
+  Zap, ChevronRight, LogOut, Droplets
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { formatDate, getPriorityClass, getStatusClass } from "@/lib/utils";
@@ -76,17 +76,23 @@ export default function AdminAnalyticsPage() {
   const { data: session, status } = useSession();
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState("");
   const user = session?.user as { role?: string; name?: string } | undefined;
 
   useEffect(() => {
     if (status === "authenticated" && user?.role === "ADMIN") {
       fetch("/api/analytics")
-        .then((r) => r.json())
-        .then((d) => { setData(d); setLoading(false); });
+        .then(async (r) => {
+          const d = await r.json();
+          if (!r.ok) throw new Error(d.error || "Unable to load analytics.");
+          setData(d);
+        })
+        .catch(() => setLoadError("We couldn’t load analytics right now. Please refresh the page and try again."))
+        .finally(() => setLoading(false));
     }
   }, [status, user?.role]);
 
-  if (status === "loading" || loading) {
+  if (status === "loading" || (status === "authenticated" && user?.role === "ADMIN" && loading)) {
     return (
       <div className="min-h-screen bg-surface-dark flex items-center justify-center">
         <div className="w-10 h-10 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
@@ -111,49 +117,48 @@ export default function AdminAnalyticsPage() {
   return (
     <div className="min-h-screen bg-surface-dark flex">
       {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 glass border-r border-white/5 min-h-screen flex flex-col">
-        <div className="p-6 border-b border-white/5">
-          <Link href="/" className="flex items-center gap-2.5">
+      <aside className="w-[4.25rem] flex-shrink-0 glass border-r border-white/5 min-h-screen flex flex-col lg:w-64">
+        <div className="border-b border-white/5 p-3 lg:p-6">
+          <Link href="/" aria-label="ClearDrain home" className="flex items-center justify-center gap-2.5 lg:justify-start">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-700 flex items-center justify-center shadow-glow-sm">
               <Droplets className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-display font-bold text-white">Clear<span className="text-primary-400">Drain</span></span>
+            <span className="hidden text-xl font-display font-bold text-white lg:inline">Clear<span className="text-primary-400">Drain</span></span>
           </Link>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+        <nav aria-label="Admin navigation" className="flex-1 space-y-1 p-2 lg:p-4">
           {[
             { href: "/dashboard", icon: TrendingUp, label: "Overview" },
             { href: "/admin/tickets", icon: FileText, label: "All Tickets" },
             { href: "/admin/analytics", icon: BarChart as React.ElementType, label: "Analytics", active: true },
-            { href: "/admin/users", icon: Users, label: "Users" },
-            { href: "/settings", icon: Settings, label: "Settings" },
           ].map((item) => (
-            <Link key={item.href} href={item.href} className={`sidebar-link ${item.active ? "active" : ""}`}>
-              <item.icon className="w-4.5 h-4.5" /> {item.label}
+            <Link key={item.href} href={item.href} aria-label={item.label} title={item.label} className={`sidebar-link justify-center px-2 lg:justify-start lg:px-4 ${item.active ? "active" : ""}`}>
+              <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" /> <span className="hidden lg:inline">{item.label}</span>
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t border-white/5">
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="sidebar-link w-full text-red-400 hover:text-red-300 hover:bg-red-900/10">
-            <LogOut className="w-4.5 h-4.5" /> Sign Out
+        <div className="border-t border-white/5 p-2 lg:p-4">
+          <button onClick={() => signOut({ callbackUrl: "/login" })} aria-label="Sign out" title="Sign out" className="sidebar-link w-full justify-center px-2 text-red-400 hover:bg-red-900/10 hover:text-red-300 lg:justify-start lg:px-4">
+            <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden="true" /> <span className="hidden lg:inline">Sign Out</span>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 p-8 overflow-auto">
-        <div className="flex items-center justify-between mb-8">
+      <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-4 sm:mb-8 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-3xl font-display font-bold text-white">City Analytics</h1>
+            <h1 className="text-2xl font-display font-bold text-white sm:text-3xl">City Analytics</h1>
             <p className="text-slate-400 mt-1">Real-time drain maintenance insights for <span className="text-primary-400">{user?.name}</span></p>
           </div>
           <div className="flex items-center gap-2">
             <span className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
-            <span className="text-sm text-slate-400">Live data</span>
+            <span className="text-sm text-slate-400">Current snapshot</span>
           </div>
         </div>
 
+        {loadError && <div className="mb-6 rounded-xl border border-amber-300/20 bg-amber-400/10 p-4 text-sm text-amber-100" role="alert">{loadError}</div>}
         {/* Stats Grid */}
-        <div className="grid grid-cols-2 xl:grid-cols-4 gap-4 mb-8">
+        <div className="mb-6 grid grid-cols-1 gap-3 sm:mb-8 sm:grid-cols-2 xl:grid-cols-4 sm:gap-4">
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0 }}>
             <StatCard icon={FileText} label="Total Tickets" value={data?.stats.totalTickets ?? 0} color="bg-gradient-to-br from-primary-600 to-primary-800" />
           </motion.div>
@@ -189,39 +194,39 @@ export default function AdminAnalyticsPage() {
         </div>
 
         {/* Charts */}
-        <div className="grid lg:grid-cols-2 gap-6 mb-6">
+        <div className="mb-6 grid grid-cols-1 gap-4 xl:grid-cols-2 sm:gap-6">
           {/* Weekly Trend */}
           <div className="glass-card p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Weekly Report Trend</h2>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={data?.charts.weeklyTrend ?? []}>
+            {data?.charts.weeklyTrend.length ? <ResponsiveContainer width="100%" height={200}>
+              <LineChart data={data.charts.weeklyTrend}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="date" tick={{ fill: "#64748b", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} />
+                <XAxis dataKey="date" tick={{ fill: "#9aacbf", fontSize: 11 }} />
+                <YAxis tick={{ fill: "#9aacbf", fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Line type="monotone" dataKey="count" stroke="#0891b2" strokeWidth={2} dot={{ fill: "#0891b2", r: 4 }} activeDot={{ r: 6 }} />
+                <Line type="monotone" dataKey="count" stroke="#19ad9e" strokeWidth={2} dot={{ fill: "#19ad9e", r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <div className="flex h-[200px] items-center justify-center text-sm text-slate-400" role="status">No trend data is available yet.</div>}
           </div>
 
           {/* By Zone */}
           <div className="glass-card p-6">
             <h2 className="text-lg font-semibold text-white mb-4">Tickets by Zone</h2>
-            <ResponsiveContainer width="100%" height={200}>
+            {zoneChartData.length ? <ResponsiveContainer width="100%" height={200}>
               <BarChart data={zoneChartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.05)" />
-                <XAxis dataKey="name" tick={{ fill: "#64748b", fontSize: 11 }} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} />
+                <XAxis dataKey="name" tick={{ fill: "#9aacbf", fontSize: 11 }} />
+                <YAxis tick={{ fill: "#9aacbf", fontSize: 11 }} />
                 <Tooltip content={<CustomTooltip />} />
-                <Bar dataKey="tickets" fill="#0891b2" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="tickets" fill="#19ad9e" radius={[4, 4, 0, 0]} />
               </BarChart>
-            </ResponsiveContainer>
+            </ResponsiveContainer> : <div className="flex h-[200px] items-center justify-center text-sm text-slate-400" role="status">No zone data is available yet.</div>}
           </div>
 
           {/* By Priority */}
           <div className="glass-card p-6">
             <h2 className="text-lg font-semibold text-white mb-4">By Priority</h2>
-            <div className="flex items-center">
+            <div className="flex items-center">{priorityChartData.length ? <>
               <ResponsiveContainer width="60%" height={180}>
                 <PieChart>
                   <Pie data={priorityChartData} cx="50%" cy="50%" innerRadius={50} outerRadius={75} paddingAngle={3} dataKey="value">
@@ -239,14 +244,13 @@ export default function AdminAnalyticsPage() {
                   </div>
                 ))}
               </div>
-            </div>
+            </> : <p className="mx-auto text-center text-sm text-slate-400" role="status">No priority data is available yet.</p>}</div>
           </div>
 
           {/* By Status */}
           <div className="glass-card p-6">
             <h2 className="text-lg font-semibold text-white mb-4">By Status</h2>
-            <div className="space-y-2.5">
-              {statusChartData.map((s) => (
+            <div className="space-y-2.5">{statusChartData.length ? statusChartData.map((s) => (
                 <div key={s.name} className="flex items-center gap-3">
                   <span className="text-xs text-slate-500 w-24 text-right">{s.name}</span>
                   <div className="flex-1 h-2 bg-slate-800 rounded-full">
@@ -260,8 +264,7 @@ export default function AdminAnalyticsPage() {
                   </div>
                   <span className="text-white text-sm font-semibold w-8 text-right">{s.value}</span>
                 </div>
-              ))}
-            </div>
+              )) : <p className="py-12 text-center text-sm text-slate-400" role="status">No status data is available yet.</p>}</div>
           </div>
         </div>
 
@@ -274,13 +277,13 @@ export default function AdminAnalyticsPage() {
             </Link>
           </div>
           <div className="divide-y divide-white/5">
-            {data?.recentTickets.map((t, i) => (
+            {data?.recentTickets.length ? data.recentTickets.map((t, i) => (
               <motion.div
                 key={t.id}
                 initial={{ opacity: 0 }}
                 animate={{ opacity: 1 }}
                 transition={{ delay: i * 0.05 }}
-                className="table-row p-4 flex items-center gap-4"
+                className="table-row flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:gap-4"
               >
                 <span className="font-mono text-primary-400 text-xs font-semibold w-28 flex-shrink-0">{t.ackId}</span>
                 <span className="text-white text-sm flex-1 truncate">{t.title}</span>
@@ -292,7 +295,7 @@ export default function AdminAnalyticsPage() {
                   View <ChevronRight className="w-3 h-3" />
                 </Link>
               </motion.div>
-            ))}
+            )) : <div className="p-8 text-center text-sm text-slate-400" role="status">No recent tickets are available yet.</div>}
           </div>
         </div>
       </main>

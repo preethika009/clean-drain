@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { Suspense, useState } from "react";
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { motion } from "framer-motion";
@@ -11,7 +11,7 @@ const WARDS = [
   "Ward 9 - West", "Ward 10 - West",
 ];
 
-export default function RegisterPage() {
+function RegisterForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const defaultRole = searchParams.get("role") === "technician" ? "TECHNICIAN" : "CITIZEN";
@@ -65,7 +65,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <div className="min-h-screen bg-surface-dark flex items-center justify-center px-6 py-16">
+    <div className="min-h-screen bg-surface-dark flex items-center justify-center px-4 py-10 sm:px-6 sm:py-16">
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
@@ -78,20 +78,22 @@ export default function RegisterPage() {
           <span className="text-2xl font-display font-bold text-white">Clear<span className="text-primary-400">Drain</span></span>
         </Link>
 
-        <div className="glass-card p-8">
+        <div className="glass-card p-5 sm:p-8">
           <h1 className="text-2xl font-display font-bold text-white mb-1">Create your account</h1>
           <p className="text-slate-400 text-sm mb-6">Join Clear Drain and help keep your city&apos;s drains clean.</p>
 
           {success ? (
             <div className="text-center py-8">
+              <div role="status" aria-live="polite">
               <CheckCircle className="w-16 h-16 text-emerald-400 mx-auto mb-4" />
               <h3 className="text-xl font-semibold text-white mb-2">Account Created!</h3>
               <p className="text-slate-400">Redirecting you to login...</p>
+              </div>
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               {error && (
-                <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-900/20 border border-red-500/30 text-red-400 text-sm">
+                <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-900/20 px-4 py-3 text-sm text-red-200" role="alert" aria-live="assertive">
                   <AlertCircle className="w-4 h-4 flex-shrink-0" />
                   {error}
                 </div>
@@ -108,6 +110,7 @@ export default function RegisterPage() {
                     <button
                       key={r.value}
                       type="button"
+                      aria-pressed={form.role === r.value}
                       onClick={() => setForm((prev) => ({ ...prev, role: r.value }))}
                       className={`flex items-center gap-2 px-4 py-3 rounded-xl border text-sm font-medium transition-all
                         ${form.role === r.value
@@ -121,16 +124,16 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label-field">Full Name</label>
+                  <label htmlFor="reg-name" className="label-field">Full Name</label>
                   <div className="relative">
                     <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input name="name" id="reg-name" value={form.name} onChange={handleChange} className="input-field pl-10" placeholder="John Doe" required />
                   </div>
                 </div>
                 <div>
-                  <label className="label-field">Phone (optional)</label>
+                  <label htmlFor="reg-phone" className="label-field">Phone (optional)</label>
                   <div className="relative">
                     <Phone className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input name="phone" id="reg-phone" value={form.phone} onChange={handleChange} className="input-field pl-10" placeholder="+91 9999999999" />
@@ -139,7 +142,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="label-field">Email Address</label>
+                <label htmlFor="reg-email" className="label-field">Email Address</label>
                 <div className="relative">
                   <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                   <input name="email" id="reg-email" type="email" value={form.email} onChange={handleChange} className="input-field pl-10" placeholder="you@example.com" required />
@@ -147,7 +150,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="label-field">Your Ward</label>
+                <label htmlFor="reg-ward" className="label-field">Your Ward</label>
                 <div className="relative">
                   <MapPin className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500 z-10" />
                   <select name="ward" id="reg-ward" value={form.ward} onChange={handleChange} className="select-field pl-10">
@@ -157,16 +160,16 @@ export default function RegisterPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
-                  <label className="label-field">Password</label>
+                  <label htmlFor="reg-password" className="label-field">Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input name="password" id="reg-password" type="password" value={form.password} onChange={handleChange} className="input-field pl-10" placeholder="Min 8 chars" required />
                   </div>
                 </div>
                 <div>
-                  <label className="label-field">Confirm Password</label>
+                  <label htmlFor="reg-confirm" className="label-field">Confirm Password</label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                     <input name="confirmPassword" id="reg-confirm" type="password" value={form.confirmPassword} onChange={handleChange} className="input-field pl-10" placeholder="Repeat password" required />
@@ -200,5 +203,20 @@ export default function RegisterPage() {
         </p>
       </motion.div>
     </div>
+  );
+}
+
+export default function RegisterPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-surface-dark flex items-center justify-center" role="status">
+          <span className="sr-only">Loading registration form</span>
+          <div className="w-10 h-10 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
+        </div>
+      }
+    >
+      <RegisterForm />
+    </Suspense>
   );
 }

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import dynamic from "next/dynamic";
@@ -38,6 +38,7 @@ export default function ReportPage() {
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState<{ ackId: string; priority: string } | null>(null);
   const [aiAnalyzing, setAiAnalyzing] = useState(false);
+  const [submitError, setSubmitError] = useState("");
 
   // Form state
   const [location, setLocation] = useState<{ lat: number; lng: number; address: string } | null>(null);
@@ -69,6 +70,7 @@ export default function ReportPage() {
     if (!location) return;
     setSubmitting(true);
     setAiAnalyzing(true);
+    setSubmitError("");
 
     try {
       let imageBase64: string | undefined;
@@ -96,9 +98,9 @@ export default function ReportPage() {
         }),
       });
 
-      setAiAnalyzing(false);
-      if (!res.ok) throw new Error("Submission failed");
       const data = await res.json();
+      setAiAnalyzing(false);
+      if (!res.ok) throw new Error(data.error || "Submission failed. Please try again.");
 
       // Upload photos
       if (photos.length > 0 && data.ticket?.id) {
@@ -114,7 +116,7 @@ export default function ReportPage() {
       setSubmitted({ ackId: data.ticket.ackId, priority: data.aiAnalysis.priority });
     } catch (err) {
       console.error(err);
-      alert("Submission failed. Please try again.");
+      setSubmitError(err instanceof Error ? err.message : "Submission failed. Please try again.");
     } finally {
       setSubmitting(false);
       setAiAnalyzing(false);
@@ -163,11 +165,11 @@ export default function ReportPage() {
   }
 
   return (
-    <div className="min-h-screen bg-surface-dark py-12 px-6">
+    <div className="min-h-screen bg-surface-dark px-4 py-8 sm:px-6 sm:py-12">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
-          <h1 className="text-3xl font-display font-bold text-white mb-2">Report a Drain Issue</h1>
+          <h1 className="text-2xl font-display font-bold text-white mb-2 sm:text-3xl">Report a Drain Issue</h1>
           <p className="text-slate-400">Fill in the details — our AI will categorize and prioritize your report.</p>
         </div>
 
@@ -388,6 +390,8 @@ export default function ReportPage() {
             )}
           </AnimatePresence>
 
+          {submitError && <p className="mb-4 rounded-xl border border-red-400/20 bg-red-500/10 px-4 py-3 text-sm text-red-100" role="alert" aria-live="assertive">{submitError}</p>}
+
           {/* Navigation Buttons */}
           <div className="flex gap-3 mt-8">
             {step > 1 && (
@@ -398,8 +402,9 @@ export default function ReportPage() {
             {step < 4 ? (
               <button
                 onClick={() => {
-                  if (step === 1 && !location) { alert("Please select a location."); return; }
-                  if (step === 2 && (!title || !description)) { alert("Please fill in all required fields."); return; }
+                  if (step === 1 && !location) { setSubmitError("Please select a location before continuing."); return; }
+                  if (step === 2 && (!title || !description)) { setSubmitError("Please fill in the required title and description."); return; }
+                  setSubmitError("");
                   setStep(step + 1);
                 }}
                 className="btn-primary flex-1 justify-center"

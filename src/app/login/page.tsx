@@ -94,14 +94,14 @@ export default function LoginPage() {
 
           <form onSubmit={handleSubmit} className="space-y-5">
             {error && (
-              <div className="flex items-center gap-2 px-4 py-3 rounded-xl bg-red-900/20 border border-red-500/30 text-red-400 text-sm">
+              <div className="flex items-center gap-2 rounded-xl border border-red-500/30 bg-red-900/20 px-4 py-3 text-sm text-red-200" role="alert" aria-live="assertive">
                 <AlertCircle className="w-4 h-4 flex-shrink-0" />
                 {error}
               </div>
             )}
 
             <div>
-              <label className="label-field">Email address</label>
+              <label htmlFor="email" className="label-field">Email address</label>
               <div className="relative">
                 <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
                 <input
@@ -119,9 +119,9 @@ export default function LoginPage() {
 
             <div>
               <div className="flex justify-between mb-1.5">
-                <label className="label-field mb-0">Password</label>
-                <Link href="/forgot-password" className="text-xs text-primary-400 hover:text-primary-300 transition-colors">
-                  Forgot password?
+                <label htmlFor="password" className="label-field mb-0">Password</label>
+                <Link href="/support" className="text-xs text-primary-200 hover:text-white transition-colors">
+                  Need help signing in?
                 </Link>
               </div>
               <div className="relative">
@@ -138,6 +138,7 @@ export default function LoginPage() {
                 />
                 <button
                   type="button"
+                  aria-label={showPass ? "Hide password" : "Show password"}
                   onClick={() => setShowPass(!showPass)}
                   className="absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
                 >
@@ -167,12 +168,12 @@ export default function LoginPage() {
           </form>
 
           {/* Demo credentials hint */}
-          <div className="mt-5 p-4 rounded-xl bg-slate-800/40 border border-white/5 text-xs text-slate-500">
+          {process.env.NODE_ENV !== "production" && <div className="mt-5 p-4 rounded-xl bg-slate-800/40 border border-white/5 text-xs text-slate-400">
             <strong className="text-slate-400">Demo Accounts:</strong><br />
             👤 citizen@demo.com / demo1234<br />
             🔧 tech@demo.com / demo1234<br />
             🏛️ admin@demo.com / demo1234
-          </div>
+          </div>}
 
           <p className="mt-6 text-center text-slate-500 text-sm">
             Don&apos;t have an account?{" "}
