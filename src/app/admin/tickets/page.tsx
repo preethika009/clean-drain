@@ -4,8 +4,8 @@ import { useSession } from "next-auth/react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import {
-  FileText, TrendingUp, Users, Settings, LogOut, Search,
-  Filter, ChevronRight, CheckCircle, UserCheck, Droplets, Bell
+  FileText, TrendingUp, LogOut, Search,
+  Filter, ChevronRight, CheckCircle, UserCheck, Droplets
 } from "lucide-react";
 import { signOut } from "next-auth/react";
 import { formatDate, getPriorityClass, getStatusClass } from "@/lib/utils";
@@ -35,37 +35,43 @@ export default function AdminTicketsPage() {
   const [assignModal, setAssignModal] = useState<{ ticketAckId: string; ticketId: string } | null>(null);
   const [selectedTech, setSelectedTech] = useState("");
   const [assigning, setAssigning] = useState(false);
+  const [loadError, setLoadError] = useState("");
+  const [assignmentError, setAssignmentError] = useState("");
 
   useEffect(() => {
     if (status === "authenticated" && user?.role === "ADMIN") {
-      Promise.all([
-        fetch("/api/tickets?limit=50").then((r) => r.json()),
-        fetch("/api/users?role=TECHNICIAN").then((r) => r.json()),
-      ]).then(([td, ud]) => {
-        setTickets(td.tickets ?? []);
-        setTechnicians(ud.users ?? []);
-        setLoading(false);
-      });
+      Promise.all([fetch("/api/tickets?limit=50"), fetch("/api/users?role=TECHNICIAN")])
+        .then(async ([ticketResponse, userResponse]) => {
+          const [td, ud] = await Promise.all([ticketResponse.json(), userResponse.json()]);
+          if (!ticketResponse.ok || !userResponse.ok) throw new Error("Unable to load complaint data.");
+          setTickets(td.tickets ?? []);
+          setTechnicians(ud.users ?? []);
+        })
+        .catch(() => setLoadError("We couldn’t load complaint data. Please refresh the page and try again."))
+        .finally(() => setLoading(false));
     }
   }, [status, user?.role]);
 
   const handleAssign = async () => {
     if (!assignModal || !selectedTech) return;
     setAssigning(true);
-    await fetch(`/api/tickets/${assignModal.ticketAckId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ assignedToId: selectedTech, status: "ASSIGNED" }),
-    });
-    setTickets((prev) =>
-      prev.map((t) =>
-        t.ackId === assignModal.ticketAckId
-          ? { ...t, status: "ASSIGNED", assignedTo: { name: technicians.find((te) => te.id === selectedTech)?.name ?? "Assigned" } }
-          : t
-      )
-    );
-    setAssignModal(null);
-    setAssigning(false);
+    setAssignmentError("");
+    try {
+      const response = await fetch(`/api/tickets/${assignModal.ticketAckId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ assignedToId: selectedTech, status: "ASSIGNED" }),
+      });
+      if (!response.ok) throw new Error("Assignment could not be saved.");
+      setTickets((prev) => prev.map((t) => t.ackId === assignModal.ticketAckId
+        ? { ...t, status: "ASSIGNED", assignedTo: { name: technicians.find((te) => te.id === selectedTech)?.name ?? "Assigned" } }
+        : t));
+      setAssignModal(null);
+    } catch {
+      setAssignmentError("The technician could not be assigned. Please try again.");
+    } finally {
+      setAssigning(false);
+    }
   };
 
   const filtered = tickets.filter((t) => {
@@ -75,7 +81,7 @@ export default function AdminTicketsPage() {
     return matchSearch && matchStatus && matchPriority;
   });
 
-  if (status === "loading" || loading) return (
+  if (status === "loading" || (status === "authenticated" && user?.role === "ADMIN" && loading)) return (
     <div className="min-h-screen bg-surface-dark flex items-center justify-center">
       <div className="w-10 h-10 border-4 border-primary-500/30 border-t-primary-500 rounded-full animate-spin" />
     </div>
@@ -89,49 +95,47 @@ export default function AdminTicketsPage() {
   return (
     <div className="min-h-screen bg-surface-dark flex">
       {/* Sidebar */}
-      <aside className="w-64 flex-shrink-0 glass border-r border-white/5 min-h-screen flex flex-col">
-        <div className="p-6 border-b border-white/5">
-          <Link href="/" className="flex items-center gap-2.5">
+      <aside className="w-[4.25rem] flex-shrink-0 glass border-r border-white/5 min-h-screen flex flex-col lg:w-64">
+        <div className="border-b border-white/5 p-3 lg:p-6">
+          <Link href="/" aria-label="ClearDrain home" className="flex items-center justify-center gap-2.5 lg:justify-start">
             <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-primary-400 to-primary-700 flex items-center justify-center shadow-glow-sm">
               <Droplets className="w-5 h-5 text-white" />
             </div>
-            <span className="text-xl font-display font-bold text-white">Clear<span className="text-primary-400">Drain</span></span>
+            <span className="hidden text-xl font-display font-bold text-white lg:inline">Clear<span className="text-primary-400">Drain</span></span>
           </Link>
         </div>
-        <nav className="flex-1 p-4 space-y-1">
+        <nav aria-label="Admin navigation" className="flex-1 space-y-1 p-2 lg:p-4">
           {[
             { href: "/dashboard", icon: TrendingUp, label: "Overview" },
             { href: "/admin/tickets", icon: FileText, label: "All Tickets", active: true },
             { href: "/admin/analytics", icon: TrendingUp, label: "Analytics" },
-            { href: "/admin/users", icon: Users, label: "Users" },
-            { href: "/settings", icon: Settings, label: "Settings" },
           ].map((item) => (
-            <Link key={item.href} href={item.href} className={`sidebar-link ${item.active ? "active" : ""}`}>
-              <item.icon className="w-4.5 h-4.5" /> {item.label}
+            <Link key={item.href} href={item.href} aria-label={item.label} title={item.label} className={`sidebar-link justify-center px-2 lg:justify-start lg:px-4 ${item.active ? "active" : ""}`}>
+              <item.icon className="h-[18px] w-[18px] shrink-0" aria-hidden="true" /> <span className="hidden lg:inline">{item.label}</span>
             </Link>
           ))}
         </nav>
-        <div className="p-4 border-t border-white/5">
-          <button onClick={() => signOut({ callbackUrl: "/login" })} className="sidebar-link w-full text-red-400 hover:text-red-300 hover:bg-red-900/10">
-            <LogOut className="w-4.5 h-4.5" /> Sign Out
+        <div className="border-t border-white/5 p-2 lg:p-4">
+          <button onClick={() => signOut({ callbackUrl: "/login" })} aria-label="Sign out" title="Sign out" className="sidebar-link w-full justify-center px-2 text-red-400 hover:bg-red-900/10 hover:text-red-300 lg:justify-start lg:px-4">
+            <LogOut className="h-[18px] w-[18px] shrink-0" aria-hidden="true" /> <span className="hidden lg:inline">Sign Out</span>
           </button>
         </div>
       </aside>
 
-      <main className="flex-1 p-8 overflow-auto">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-3xl font-display font-bold text-white">All Tickets</h1>
+      <main className="min-w-0 flex-1 overflow-auto p-4 sm:p-6 lg:p-8">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <h1 className="text-2xl font-display font-bold text-white sm:text-3xl">All Tickets</h1>
           <span className="badge bg-primary-900/30 text-primary-300 border-primary-700/30 text-sm">
             {filtered.length} tickets
           </span>
         </div>
 
         {/* Filters */}
-        <div className="flex flex-wrap gap-3 mb-6">
-          <div className="relative">
+        <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap">
+          <div className="relative w-full sm:w-56">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
-            <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by ID, title, reporter…"
-              className="pl-9 pr-4 py-2 rounded-xl bg-slate-800/60 border border-white/10 text-white placeholder-slate-500 text-sm outline-none focus:border-primary-500/50 w-56" />
+            <input aria-label="Search by ID, title, or reporter" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search by ID, title, reporter…"
+              className="w-full rounded-xl border border-white/10 bg-slate-800/60 py-2 pl-9 pr-4 text-sm text-white outline-none placeholder-slate-500 focus:border-primary-500/50" />
           </div>
           <div className="relative">
             <Filter className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
@@ -148,6 +152,7 @@ export default function AdminTicketsPage() {
           </select>
         </div>
 
+        {loadError && <div className="mb-4 rounded-xl border border-amber-300/20 bg-amber-400/10 p-4 text-sm text-amber-100" role="alert">{loadError}</div>}
         {/* Table */}
         <div className="glass-card overflow-hidden">
           <div className="overflow-x-auto">
@@ -203,7 +208,10 @@ export default function AdminTicketsPage() {
               </tbody>
             </table>
             {filtered.length === 0 && (
-              <div className="p-12 text-center text-slate-500">No tickets match the current filters.</div>
+              <div className="p-12 text-center">
+                <p className="font-medium text-slate-200">{tickets.length === 0 ? "No complaints to manage yet" : "No tickets match these filters"}</p>
+                <p className="mt-2 text-sm text-slate-400">{tickets.length === 0 ? "New reports will appear here." : "Try clearing a filter or changing your search."}</p>
+              </div>
             )}
           </div>
         </div>
@@ -212,11 +220,12 @@ export default function AdminTicketsPage() {
       {/* Assign Modal */}
       {assignModal && (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center px-6">
-          <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card p-8 max-w-md w-full shadow-elevated">
-            <h3 className="text-lg font-bold text-white mb-1">Assign Technician</h3>
+          <motion.div role="dialog" aria-modal="true" aria-labelledby="assign-dialog-title" initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="glass-card w-full max-w-md p-5 shadow-elevated sm:p-8">
+            <h3 id="assign-dialog-title" className="text-lg font-bold text-white mb-1">Assign Technician</h3>
             <p className="text-slate-400 text-sm mb-5">Ticket: <strong className="text-primary-400">{assignModal.ticketAckId}</strong></p>
-            <div className="space-y-2 mb-5">
-              {technicians.map((tech) => (
+            {assignmentError && <p className="mb-4 rounded-lg border border-red-400/20 bg-red-500/10 p-3 text-sm text-red-200" role="alert">{assignmentError}</p>}
+            <div className="mb-5 max-h-64 space-y-2 overflow-y-auto">
+              {technicians.length === 0 ? <p className="py-4 text-sm text-slate-400">No active technicians are available to assign.</p> : technicians.map((tech) => (
                 <button
                   key={tech.id}
                   onClick={() => setSelectedTech(tech.id)}

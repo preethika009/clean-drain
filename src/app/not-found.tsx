@@ -1,7 +1,7 @@
 "use client";
 import Link from "next/link";
 import { motion } from "framer-motion";
-import { Home, Search, MapPin, Droplets, ArrowLeft } from "lucide-react";
+import { Home, Search, MapPin, Droplets } from "lucide-react";
 
 export default function NotFoundPage() {
   return (

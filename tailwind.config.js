@@ -9,19 +9,19 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Primary brand - deep teal/cyan water theme
+        // Primary brand - civic teal paired with deep navy
         primary: {
-          50: "#ecfeff",
-          100: "#cffafe",
-          200: "#a5f3fc",
-          300: "#67e8f9",
-          400: "#22d3ee",
-          500: "#06b6d4",
-          600: "#0891b2",
-          700: "#0e7490",
-          800: "#155e75",
-          900: "#164e63",
-          950: "#083344",
+          50: "#effcf9",
+          100: "#d3f7ef",
+          200: "#a9edde",
+          300: "#70ddc9",
+          400: "#3cc8b4",
+          500: "#19ad9e",
+          600: "#118e86",
+          700: "#0f726e",
+          800: "#115b59",
+          900: "#124c4b",
+          950: "#062d2e",
         },
         // Secondary - deep blue
         secondary: {
@@ -57,22 +57,22 @@ module.exports = {
         low: "#22c55e",
         // Dark mode surfaces
         surface: {
-          dark: "#0a0f1e",
-          card: "#0f172a",
-          elevated: "#1e293b",
+          dark: "#081827",
+          card: "#0e2133",
+          elevated: "#173149",
         },
       },
       fontFamily: {
-        sans: ["Inter", "system-ui", "sans-serif"],
-        display: ["Outfit", "Inter", "system-ui", "sans-serif"],
-        mono: ["JetBrains Mono", "monospace"],
+        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        display: ["var(--font-outfit)", "var(--font-inter)", "system-ui", "sans-serif"],
+        mono: ["var(--font-jetbrains-mono)", "monospace"],
       },
       backgroundImage: {
         "gradient-radial": "radial-gradient(var(--tw-gradient-stops))",
         "gradient-conic": "conic-gradient(from 180deg at 50% 50%, var(--tw-gradient-stops))",
-        "hero-gradient": "linear-gradient(135deg, #083344 0%, #0e7490 40%, #0891b2 100%)",
-        "card-gradient": "linear-gradient(145deg, rgba(15,23,42,0.9) 0%, rgba(30,41,59,0.8) 100%)",
-        "glow-gradient": "radial-gradient(ellipse at top, #0891b2 0%, transparent 70%)",
+        "hero-gradient": "linear-gradient(135deg, #0b2033 0%, #115b59 52%, #118e86 100%)",
+        "card-gradient": "linear-gradient(145deg, rgba(14,33,51,0.94) 0%, rgba(23,49,73,0.88) 100%)",
+        "glow-gradient": "radial-gradient(ellipse at top, rgba(25,173,158,0.6) 0%, transparent 70%)",
       },
       animation: {
         "fade-in": "fadeIn 0.5s ease-in-out",
@@ -94,13 +94,13 @@ module.exports = {
         bounceSoft: { "0%, 100%": { transform: "translateY(0)" }, "50%": { transform: "translateY(-5px)" } },
       },
       boxShadow: {
-        "glow-sm": "0 0 10px rgba(8,145,178,0.3)",
-        "glow": "0 0 20px rgba(8,145,178,0.4)",
-        "glow-lg": "0 0 40px rgba(8,145,178,0.5)",
+        "glow-sm": "0 0 12px rgba(25,173,158,0.22)",
+        "glow": "0 0 22px rgba(25,173,158,0.25)",
+        "glow-lg": "0 0 34px rgba(25,173,158,0.28)",
         "glow-urgent": "0 0 20px rgba(239,68,68,0.5)",
         "glass": "0 8px 32px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.1)",
-        "card": "0 4px 24px rgba(0,0,0,0.4)",
-        "elevated": "0 20px 60px rgba(0,0,0,0.5)",
+        "card": "0 8px 28px rgba(1,12,23,0.24)",
+        "elevated": "0 24px 60px rgba(1,12,23,0.36)",
       },
       backdropBlur: {
         xs: "2px",

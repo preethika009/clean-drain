@@ -16,7 +16,7 @@
 
 ## 🌊 Overview
 
-**Clear Drain** is a production-ready civic issue tracking platform dedicated to drain cleaning, blockage reporting, and sanitation resolution tracking. Built with Next.js 15, Prisma/PostgreSQL, Tailwind CSS, and the Gemini AI API.
+**ClearDrain** is an existing civic issue tracking platform for drain cleaning, blockage reporting, and sanitation resolution tracking. It uses Next.js 15, Prisma/PostgreSQL, Tailwind CSS, and the Gemini AI API. A successful local build does not verify deployment credentials, database readiness, durable uploads, or authenticated user flows; complete those checks in staging before public launch.
 
 ---
 
@@ -99,19 +99,17 @@ npm install
 
 ### Step 2 — Configure Environment
 ```bash
-# Copy the template
-copy .env.example .env.local
+# Copy the template (Linux/macOS)
+cp .env.example .env.local
 
 # Edit .env.local with your values:
-# DATABASE_URL = your PostgreSQL connection string
-# NEXTAUTH_SECRET = any 32+ char random string
-# GEMINI_API_KEY = your Google AI Studio key
-# SMTP_USER / SMTP_PASS = Gmail + App Password
+# Fill all placeholders in .env.local; never commit it.
+# The template lists the database, auth, AI, app URL, and SMTP variables.
 ```
 
 ### Step 3 — Set Up the Database
 ```bash
-# Push schema to PostgreSQL
+# Local development only: sync the Prisma schema to a disposable database.
 npm run db:push
 
 # Seed demo data (creates demo accounts)
@@ -218,21 +216,19 @@ Session
 
 ## 🏗️ Production Deployment
 
-```bash
-# Build
-npm run build
+Import the existing `preethika009/clean-drain` repository into a Next.js-capable host (for example, Vercel). Use the repository root, the standard Next.js build command (`npm run build`), and the standard start command (`npm start`). `postinstall` runs `prisma generate` from the checked-in schema.
 
-# For PostgreSQL — use connection pooling (PgBouncer / Supabase)
-# DATABASE_URL="postgresql://..."
+The checked-in `.npmrc` keeps clean installs reproducible using legacy peer resolution because the existing React Leaflet/React 19 and NextAuth/Nodemailer peer ranges do not currently align. This is an install workaround, not a dependency-health fix; review and reconcile these versions before production.
 
-# For file uploads — replace local storage with S3:
-# AWS_ACCESS_KEY_ID, AWS_SECRET_ACCESS_KEY, AWS_BUCKET_NAME
+Configure these values in the host's **server-side environment settings**, not in Git: `DATABASE_URL` (managed PostgreSQL connection string), `NEXTAUTH_SECRET` (a newly generated, long random secret), `NEXTAUTH_URL` and `APP_URL` (the final HTTPS origin), `GEMINI_API_KEY` (Google AI Studio), and `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, and `EMAIL_FROM` (email delivery). See `.env.example` for names and placeholders. Do not use the example values in production.
 
-# Run
-npm start
-```
+**Database:** This repository currently has no checked-in `prisma/migrations` history. Do not run `db:push` against production. Provision the PostgreSQL database, review the current Prisma schema, and create/review an initial migration before enabling production traffic. Seed demo users only in a disposable development database.
 
-> **Recommended Platforms:** Vercel (Next.js) + Supabase (PostgreSQL) + Cloudflare R2 (media)
+**Uploads and background jobs:** The upload implementation writes under `public/uploads`, which is gitignored and is not durable on typical serverless hosts. Configure persistent object storage (for example, S3/R2) before relying on uploaded images in production. The in-process `node-cron` jobs also need a persistent worker or managed scheduler; a serverless web process is not a reliable scheduler.
+
+Before launch, run lint/build and test registration, login, report submission, public tracking, admin assignment, and analytics against staging with the real database and email/AI settings. A dependency audit still reports advisories in packages with major-version fixes; review and test those upgrades separately. These checks have not been completed simply by building the frontend.
+
+> **Suggested hosting pattern:** a Next.js host + managed PostgreSQL + persistent object storage + a separately managed scheduler/worker.
 
 ---
 

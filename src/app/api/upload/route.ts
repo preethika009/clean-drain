@@ -1,9 +1,19 @@
-import { NextResponse } from "next/server";
-import { writeFile, mkdir } from "fs/promises";
+import { mkdir, unlink, writeFile } from "fs/promises";
 import { join } from "path";
 import { getServerSession } from "next-auth";
+import { NextResponse } from "next/server";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+
+const extensionByMimeType: Record<string, string> = {
+  "image/jpeg": "jpg",
+  "image/png": "png",
+  "image/webp": "webp",
+  "image/heic": "heic",
+  "video/mp4": "mp4",
+};
+
+const validMediaTypes = new Set(["BEFORE_PHOTO", "AFTER_PHOTO", "VIDEO", "DOCUMENT"]);
 
 export async function POST(req: Request) {
   try {
@@ -12,54 +22,74 @@ export async function POST(req: Request) {
 
     const user = session.user as { id: string; role: string };
     const formData = await req.formData();
-    const file = formData.get("file") as File;
-    const ticketId = formData.get("ticketId") as string;
-    const mediaType = formData.get("type") as string; // BEFORE_PHOTO | AFTER_PHOTO
+    const fileValue = formData.get("file");
+    const ticketIdValue = formData.get("ticketId");
+    const mediaTypeValue = formData.get("type");
 
-    if (!file || !ticketId || !mediaType) {
+    if (!fileValue || typeof fileValue === "string" || typeof ticketIdValue !== "string" || typeof mediaTypeValue !== "string") {
       return NextResponse.json({ error: "file, ticketId, and type are required" }, { status: 400 });
     }
 
-    // Only technicians can upload AFTER photos
-    if (mediaType === "AFTER_PHOTO" && user.role !== "TECHNICIAN") {
-      return NextResponse.json({ error: "Only technicians can upload after photos" }, { status: 403 });
+    const file = fileValue;
+    const ticketId = ticketIdValue;
+    const mediaType = mediaTypeValue;
+    if (!validMediaTypes.has(mediaType)) {
+      return NextResponse.json({ error: "Invalid media type" }, { status: 400 });
     }
 
-    // Validate file type
-    const allowedTypes = ["image/jpeg", "image/png", "image/webp", "image/heic", "video/mp4"];
-    if (!allowedTypes.includes(file.type)) {
+    const extension = extensionByMimeType[file.type];
+    if (!extension) {
       return NextResponse.json({ error: "Invalid file type" }, { status: 400 });
     }
 
-    // Max 10MB
     if (file.size > 10 * 1024 * 1024) {
       return NextResponse.json({ error: "File too large. Max 10MB." }, { status: 400 });
     }
 
-    const uploadDir = join(process.cwd(), "public", "uploads", ticketId);
-    await mkdir(uploadDir, { recursive: true });
-
-    const ext = file.name.split(".").pop();
-    const filename = `${mediaType.toLowerCase()}-${Date.now()}.${ext}`;
-    const bytes = await file.arrayBuffer();
-    await writeFile(join(uploadDir, filename), Buffer.from(bytes));
-
-    const ticket = await prisma.ticket.findUnique({ where: { id: ticketId } });
+    const ticket = await prisma.ticket.findUnique({
+      where: { id: ticketId },
+      select: { id: true, reportedById: true, assignedToId: true },
+    });
     if (!ticket) return NextResponse.json({ error: "Ticket not found" }, { status: 404 });
 
-    const media = await prisma.media.create({
-      data: {
-        ticketId,
-        type: mediaType as "BEFORE_PHOTO" | "AFTER_PHOTO" | "VIDEO" | "DOCUMENT",
-        url: `/uploads/${ticketId}/${filename}`,
-        filename,
-        mimeType: file.type,
-        sizeBytes: file.size,
-        uploadedBy: user.id,
-      },
-    });
+    if (mediaType === "AFTER_PHOTO") {
+      if (user.role !== "TECHNICIAN" || ticket.assignedToId !== user.id) {
+        return NextResponse.json({ error: "Only the assigned technician can upload after photos" }, { status: 403 });
+      }
+    } else if (mediaType === "BEFORE_PHOTO") {
+      const isReporter = user.role === "CITIZEN" && ticket.reportedById === user.id;
+      if (user.role !== "ADMIN" && !isReporter) {
+        return NextResponse.json({ error: "Only the reporting citizen or an administrator can upload before photos" }, { status: 403 });
+      }
+    } else if (user.role !== "ADMIN" && !(user.role === "TECHNICIAN" && ticket.assignedToId === user.id)) {
+      return NextResponse.json({ error: "Only assigned staff can upload this media type" }, { status: 403 });
+    }
 
-    return NextResponse.json({ media }, { status: 201 });
+    // Use the database-generated ticket ID and a MIME-derived extension, never user-supplied path segments.
+    const uploadDir = join(process.cwd(), "public", "uploads", ticket.id);
+    await mkdir(uploadDir, { recursive: true });
+    const filename = `${mediaType.toLowerCase()}-${Date.now()}.${extension}`;
+    const filePath = join(uploadDir, filename);
+    const bytes = await file.arrayBuffer();
+    await writeFile(filePath, Buffer.from(bytes));
+
+    try {
+      const media = await prisma.media.create({
+        data: {
+          ticketId: ticket.id,
+          type: mediaType as "BEFORE_PHOTO" | "AFTER_PHOTO" | "VIDEO" | "DOCUMENT",
+          url: `/uploads/${ticket.id}/${filename}`,
+          filename,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          uploadedBy: user.id,
+        },
+      });
+      return NextResponse.json({ media }, { status: 201 });
+    } catch (error) {
+      await unlink(filePath).catch(() => undefined);
+      throw error;
+    }
   } catch (err) {
     console.error("[POST /api/upload]", err);
     return NextResponse.json({ error: "Upload failed" }, { status: 500 });

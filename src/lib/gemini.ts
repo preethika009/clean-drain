@@ -1,4 +1,4 @@
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { GoogleGenerativeAI, type Part } from "@google/generative-ai";
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
 
@@ -44,12 +44,12 @@ Priority Guidelines:
 
 Respond with ONLY valid JSON, no markdown.`;
 
-  const parts: Parameters<typeof model.generateContent>[0] extends { contents: infer C } ? C[0]["parts"] : never[] = [
+  const parts: Part[] = [
     { text: prompt }
   ];
 
   if (imageBase64 && mimeType) {
-    (parts as { inlineData?: { mimeType: string; data: string }; text?: string }[]).push({
+    parts.push({
       inlineData: {
         mimeType: mimeType,
         data: imageBase64,

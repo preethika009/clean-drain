@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
+import type { Prisma } from "@prisma/client";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { generateAckId, calculateSLADeadline } from "@/lib/utils";
@@ -87,6 +88,9 @@ export async function POST(req: Request) {
 
     // AI Analysis
     const aiResult = await analyzeComplaint(description, imageBase64, imageMimeType);
+    const submittedTags = Array.isArray(tags)
+      ? tags.filter((tag: unknown): tag is string => typeof tag === "string")
+      : [];
 
     const ackId = generateAckId();
     const slaDeadline = calculateSLADeadline(7);
@@ -99,13 +103,13 @@ export async function POST(req: Request) {
         status: "PENDING",
         priority: aiResult.priority,
         severity: aiResult.severity,
-        tags: aiResult.suggestedTags,
+        tags: submittedTags.length ? submittedTags : aiResult.suggestedTags,
         latitude,
         longitude,
         address,
         ward: ward ?? "",
         zone: aiResult.zone,
-        aiAnalysis: aiResult as unknown as Record<string, unknown>,
+        aiAnalysis: aiResult as unknown as Prisma.InputJsonObject,
         aiConfidence: aiResult.confidence,
         slaDeadline,
         reportedById: user.id,
