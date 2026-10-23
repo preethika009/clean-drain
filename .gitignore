@@ -1,21 +1,31 @@
-# Dependency directories
+
+# Dependencies
 node_modules/
+
+# Next.js build output
 .next/
 out/
 
-# Environment files
+# Environment variables - never upload secrets
 .env
-.env.local
-.env.production
+.env*
+!.env.example
 
 # Uploads
 public/uploads/
 
-# Misc
-.DS_Store
+# Logs and system files
 *.log
-.vercel
+.DS_Store
 
+# Deployment settings
+.vercel/
 
-.env*
-!.env.example
+# TypeScript cache
+*.tsbuildinfo
+
+# Other caches
+.cache/
+.parcel-cache/
+coverage/
+.nyc_output/
